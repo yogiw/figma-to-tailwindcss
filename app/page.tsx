@@ -63,6 +63,15 @@ const toTailwind = (cssObj: Record<string, string>) => {
     "0.1em": "widest",
   };
 
+  // Text decoration style mapping
+  const textDecorationStyleMap: Record<string, string> = {
+    solid: "solid",
+    double: "double",
+    dotted: "dotted",
+    dashed: "dashed",
+    wavy: "wavy",
+  };
+
   // ---------- TEXT ----------
   if (cssObj["color"]) {
     // Check if it's a dictionary-mapped value
@@ -74,6 +83,77 @@ const toTailwind = (cssObj: Record<string, string>) => {
     }
   }
   if (cssObj["text-align"]) tw.push(`text-${cssObj["text-align"]}`);
+
+  // Text decoration
+  if (cssObj["text-decoration-line"]) {
+    const decoration = cssObj["text-decoration-line"];
+    if (decoration === "underline") {
+      tw.push("underline");
+    } else if (decoration === "line-through") {
+      tw.push("line-through");
+    } else if (decoration === "overline") {
+      tw.push("overline");
+    } else if (decoration === "none") {
+      tw.push("no-underline");
+    } else {
+      tw.push(`decoration-[${decoration}]`);
+    }
+  }
+  if (cssObj["text-decoration-style"]) {
+    const style = cssObj["text-decoration-style"];
+    if (style !== "solid") {
+      // solid is default, so we only add classes for other styles
+      const mappedStyle = textDecorationStyleMap[style];
+      if (mappedStyle) {
+        tw.push(`decoration-${mappedStyle}`);
+      } else {
+        tw.push(`decoration-[${style}]`);
+      }
+    }
+  }
+  if (cssObj["text-decoration-skip-ink"]) {
+    const skipInk = cssObj["text-decoration-skip-ink"];
+    if (skipInk === "auto") {
+      tw.push("decoration-skip-ink");
+    } else if (skipInk === "none") {
+      tw.push("decoration-skip-ink-none");
+    } else {
+      tw.push(`decoration-skip-ink-[${skipInk}]`);
+    }
+  }
+  if (cssObj["text-decoration-thickness"]) {
+    const thickness = cssObj["text-decoration-thickness"];
+    if (thickness !== "auto") {
+      // Tailwind v3.3+ supports decoration-{width} but for arbitrary values use CSS property
+      // Try to map common values first
+      if (thickness === "1px" || thickness === "thin") {
+        tw.push("decoration-1");
+      } else if (thickness === "2px" || thickness === "medium") {
+        tw.push("decoration-2");
+      } else if (thickness === "4px" || thickness === "thick") {
+        tw.push("decoration-4");
+      } else {
+        tw.push(`[text-decoration-thickness:${thickness}]`);
+      }
+    }
+  }
+  if (cssObj["text-underline-offset"]) {
+    const offset = cssObj["text-underline-offset"];
+    if (offset !== "auto") {
+      tw.push(`underline-offset-[${offset}]`);
+    }
+  }
+  if (cssObj["text-underline-position"]) {
+    const position = cssObj["text-underline-position"];
+    if (position !== "auto") {
+      // Tailwind doesn't have a direct utility for text-underline-position
+      // Use arbitrary value with CSS custom property or skip
+      // For "from-font", we'll skip as it's often the default
+      if (position !== "from-font") {
+        tw.push(`[text-underline-position:${position}]`);
+      }
+    }
+  }
 
   // ---------- FONT ----------
   if (cssObj["font-size"]) {
@@ -109,6 +189,7 @@ const toTailwind = (cssObj: Record<string, string>) => {
     if (mappedTracking) {
       tw.push(`tracking-${mappedTracking}`);
     } else {
+      // Handle px values and other units
       tw.push(`tracking-[${tracking}]`);
     }
   }
@@ -119,6 +200,16 @@ const toTailwind = (cssObj: Record<string, string>) => {
       tw.push(`font-${dictValue}`);
     } else {
       tw.push(`font-[${cssObj["font-family"]}]`);
+    }
+  }
+  if (cssObj["font-style"]) {
+    const style = cssObj["font-style"];
+    if (style === "italic") {
+      tw.push("italic");
+    } else if (style === "normal") {
+      tw.push("not-italic");
+    } else {
+      tw.push(`font-[${style}]`);
     }
   }
 
