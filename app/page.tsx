@@ -13,16 +13,97 @@ const toTailwind = (cssObj: Record<string, string>) => {
 
   const px = (v: string) => v.replace("px", "");
 
+  // Font weight mapping
+  const fontWeightMap: Record<string, string> = {
+    "100": "thin",
+    "200": "extralight",
+    "300": "light",
+    "400": "normal",
+    "500": "medium",
+    "600": "semibold",
+    "700": "bold",
+    "800": "extrabold",
+    "900": "black",
+  };
+
+  // Font size mapping (px to Tailwind size)
+  const fontSizeMap: Record<string, string> = {
+    "12": "xs",
+    "14": "sm",
+    "16": "base",
+    "18": "lg",
+    "20": "xl",
+    "24": "2xl",
+    "30": "3xl",
+    "36": "4xl",
+    "48": "5xl",
+    "60": "6xl",
+    "72": "7xl",
+    "96": "8xl",
+    "128": "9xl",
+  };
+
+  // Line height mapping
+  const lineHeightMap: Record<string, string> = {
+    "1": "none",
+    "1.25": "tight",
+    "1.5": "snug",
+    "1.75": "normal",
+    "2": "relaxed",
+    "2.25": "loose",
+  };
+
+  // Letter spacing mapping
+  const letterSpacingMap: Record<string, string> = {
+    "-0.05em": "tighter",
+    "-0.025em": "tight",
+    "0em": "normal",
+    "0.025em": "wide",
+    "0.05em": "wider",
+    "0.1em": "widest",
+  };
+
   // ---------- TEXT ----------
   if (cssObj["color"]) tw.push(`text-[${cssObj["color"]}]`);
   if (cssObj["text-align"]) tw.push(`text-${cssObj["text-align"]}`);
 
   // ---------- FONT ----------
-  if (cssObj["font-size"]) tw.push(`text-[${px(cssObj["font-size"])}px]`);
-  if (cssObj["font-weight"]) tw.push(`font-[${cssObj["font-weight"]}]`);
-  if (cssObj["line-height"]) tw.push(`leading-[${cssObj["line-height"]}]`);
-  if (cssObj["letter-spacing"])
-    tw.push(`tracking-[${cssObj["letter-spacing"]}]`);
+  if (cssObj["font-size"]) {
+    const sizePx = px(cssObj["font-size"]);
+    const mappedSize = fontSizeMap[sizePx];
+    if (mappedSize) {
+      tw.push(`text-${mappedSize}`);
+    } else {
+      tw.push(`text-[${sizePx}px]`);
+    }
+  }
+  if (cssObj["font-weight"]) {
+    const weight = cssObj["font-weight"];
+    const mappedWeight = fontWeightMap[weight];
+    if (mappedWeight) {
+      tw.push(`font-${mappedWeight}`);
+    } else {
+      tw.push(`font-[${weight}]`);
+    }
+  }
+  if (cssObj["line-height"]) {
+    const leading = cssObj["line-height"];
+    const mappedLeading = lineHeightMap[leading];
+    if (mappedLeading) {
+      tw.push(`leading-${mappedLeading}`);
+    } else {
+      tw.push(`leading-[${leading}]`);
+    }
+  }
+  if (cssObj["letter-spacing"]) {
+    const tracking = cssObj["letter-spacing"];
+    const mappedTracking = letterSpacingMap[tracking];
+    if (mappedTracking) {
+      tw.push(`tracking-${mappedTracking}`);
+    } else {
+      tw.push(`tracking-[${tracking}]`);
+    }
+  }
   if (cssObj["font-family"]) {
     // Check if it's a dictionary-mapped value
     if (cssObj["font-family"].startsWith("__DICT__")) {
