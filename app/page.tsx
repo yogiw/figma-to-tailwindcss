@@ -332,9 +332,175 @@ const applyPrefixes = (classes: string[], prefixStr: string) => {
   return classes.map((cls) => px.map((p) => `${p}${cls}`).join(" ")).join(" ");
 };
 
+// Get the property type from a Tailwind class (e.g., "text-sm" -> "font-size", "font-bold" -> "font-weight")
+const getClassPropertyType = (className: string): string | null => {
+  // Remove prefix if present (e.g., "lg:text-sm" -> "text-sm")
+  const cleanClass = className.includes(":")
+    ? className.split(":")[1]
+    : className;
+
+  // Font size (text-xs, text-sm, text-base, etc. or text-[size])
+  if (
+    /^text-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)$/.test(cleanClass)
+  ) {
+    return "font-size";
+  }
+  // Arbitrary font size (text-[16px], text-[1rem], etc.)
+  if (cleanClass.startsWith("text-[") && /(px|rem|em)\]$/.test(cleanClass)) {
+    return "font-size";
+  }
+  // Font weight (font-* but not font-style)
+  if (
+    cleanClass.startsWith("font-") &&
+    !cleanClass.startsWith("font-[") &&
+    cleanClass !== "font-italic" &&
+    cleanClass !== "font-not-italic"
+  ) {
+    // font-normal, font-bold, font-thin, etc. are all font-weight
+    return "font-weight";
+  }
+  // Arbitrary font weight (font-[700], font-[400], etc.)
+  if (cleanClass.startsWith("font-[") && /^font-\[\d+\]$/.test(cleanClass)) {
+    return "font-weight";
+  }
+  // Font style
+  if (cleanClass === "italic" || cleanClass === "not-italic") {
+    return "font-style";
+  }
+  // Line height (leading-*)
+  if (cleanClass.startsWith("leading-")) {
+    return "line-height";
+  }
+  // Letter spacing (tracking-*)
+  if (cleanClass.startsWith("tracking-")) {
+    return "letter-spacing";
+  }
+  // Text decoration
+  if (
+    cleanClass.startsWith("underline") ||
+    cleanClass.startsWith("line-through") ||
+    cleanClass.startsWith("overline") ||
+    cleanClass.startsWith("no-underline") ||
+    cleanClass.startsWith("decoration-")
+  ) {
+    return "text-decoration";
+  }
+  // Color (text-[color] or text-{color}-{shade} but not font-size)
+  if (
+    cleanClass === "text-white" ||
+    cleanClass === "text-black" ||
+    /^text-(red|blue|green|yellow|purple|pink|indigo|gray|slate|zinc|neutral|stone|amber|orange|lime|emerald|teal|cyan|sky|violet|fuchsia|rose)-\d+$/.test(
+      cleanClass
+    )
+  ) {
+    return "color";
+  }
+  // Arbitrary color (text-[#hex] or text-[rgb(...)])
+  if (cleanClass.startsWith("text-[") && !/(px|rem|em)\]$/.test(cleanClass)) {
+    return "color";
+  }
+  // Background color
+  if (cleanClass.startsWith("bg-")) {
+    return "background-color";
+  }
+  // Border
+  if (
+    cleanClass.startsWith("border") &&
+    !cleanClass.startsWith("border-radius")
+  ) {
+    return "border";
+  }
+  // Border radius
+  if (cleanClass.startsWith("rounded")) {
+    return "border-radius";
+  }
+  // Width
+  if (cleanClass.startsWith("w-")) {
+    return "width";
+  }
+  // Height
+  if (cleanClass.startsWith("h-")) {
+    return "height";
+  }
+  // Opacity
+  if (cleanClass.startsWith("opacity-")) {
+    return "opacity";
+  }
+  // Box shadow
+  if (cleanClass.startsWith("shadow-")) {
+    return "box-shadow";
+  }
+  // Spacing (margin/padding)
+  if (/^(m|mt|mb|ml|mr|mx|my|p|pt|pb|pl|pr|px|py)-/.test(cleanClass)) {
+    return "spacing";
+  }
+
+  return null;
+};
+
+// Merge existing classes with new classes, removing duplicates based on property type
+const mergeClasses = (
+  existingClasses: string[],
+  newClasses: string[]
+): string[] => {
+  // Parse existing classes into a map by property type
+  const existingByProperty = new Map<string, string>();
+  const existingOther: string[] = [];
+
+  for (const cls of existingClasses) {
+    const propertyType = getClassPropertyType(cls);
+    if (propertyType) {
+      existingByProperty.set(propertyType, cls);
+    } else {
+      existingOther.push(cls);
+    }
+  }
+
+  // Start with all existing classes
+  const merged: string[] = [...existingClasses];
+
+  // Process new classes
+  for (const newClass of newClasses) {
+    const propertyType = getClassPropertyType(newClass);
+
+    if (propertyType) {
+      // Check if there's a conflicting existing class
+      const existingClass = existingByProperty.get(propertyType);
+
+      if (existingClass) {
+        // There's a conflict - check if they're the same
+        // Remove prefix from new class for comparison
+        const newClassClean = newClass.includes(":")
+          ? newClass.split(":")[1]
+          : newClass;
+        const existingClassClean = existingClass.includes(":")
+          ? existingClass.split(":")[1]
+          : existingClass;
+
+        if (newClassClean !== existingClassClean) {
+          // Different values - add the prefixed new class
+          merged.push(newClass);
+        }
+        // If same, skip (don't add duplicate)
+      } else {
+        // No conflict - add the new class
+        merged.push(newClass);
+      }
+    } else {
+      // No property type - check if it already exists
+      if (!existingClasses.includes(newClass)) {
+        merged.push(newClass);
+      }
+    }
+  }
+
+  return merged;
+};
+
 export default function TailwindConverter() {
   const [cssInput, setCssInput] = useState("");
   const [prefixes, setPrefixes] = useState("");
+  const [existingClasses, setExistingClasses] = useState("");
   const [copied, setCopied] = useState(false);
 
   // Load dictionary from localStorage with lazy initialization
@@ -407,9 +573,25 @@ export default function TailwindConverter() {
   const output = useMemo(() => {
     const parsed = parseCSS(cssInput);
     const tw = toTailwind(parsed);
-    const withPx = applyPrefixes(tw, prefixes);
-    return withPx;
-  }, [cssInput, prefixes, parseCSS]);
+    const withPxStr = applyPrefixes(tw, prefixes);
+
+    // Parse existing classes
+    const existingClassesList = existingClasses
+      .split(/\s+/)
+      .map((c) => c.trim())
+      .filter(Boolean);
+
+    // Parse new classes (split the string back into array)
+    const newClassesList = withPxStr
+      .split(/\s+/)
+      .map((c) => c.trim())
+      .filter(Boolean);
+
+    // Merge existing classes with new classes
+    const merged = mergeClasses(existingClassesList, newClassesList);
+
+    return merged.join(" ");
+  }, [cssInput, prefixes, existingClasses, parseCSS]);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(output);
@@ -447,6 +629,14 @@ export default function TailwindConverter() {
         placeholder="Paste CSS from Figma..."
         value={cssInput}
         onChange={(e) => setCssInput(e.target.value)}
+      />
+
+      {/* EXISTING CLASSES INPUT */}
+      <input
+        className="w-full border p-2 rounded"
+        placeholder="Existing classes (e.g. text-sm font-bold)"
+        value={existingClasses}
+        onChange={(e) => setExistingClasses(e.target.value)}
       />
 
       {/* PREFIX INPUT */}
