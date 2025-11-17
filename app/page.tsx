@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 
 interface VarDict {
-  [key: string]: string; // key: CSS variable name (e.g., "--Heading-Font"), value: Tailwind class suffix (e.g., "mackinac")
+  [key: string]: string; // key: CSS variable name (e.g., "--Border-Medium", "--Heading-Font"), value: Tailwind class value (e.g., "border-gray-400", "mackinac")
 }
 
 const STORAGE_KEY = "figma-tailwind-var-dict";
@@ -64,7 +64,15 @@ const toTailwind = (cssObj: Record<string, string>) => {
   };
 
   // ---------- TEXT ----------
-  if (cssObj["color"]) tw.push(`text-[${cssObj["color"]}]`);
+  if (cssObj["color"]) {
+    // Check if it's a dictionary-mapped value
+    if (cssObj["color"].startsWith("__DICT__")) {
+      const dictValue = cssObj["color"].replace("__DICT__", "");
+      tw.push(`text-[${dictValue}]`);
+    } else {
+      tw.push(`text-[${cssObj["color"]}]`);
+    }
+  }
   if (cssObj["text-align"]) tw.push(`text-${cssObj["text-align"]}`);
 
   // ---------- FONT ----------
@@ -138,8 +146,67 @@ const toTailwind = (cssObj: Record<string, string>) => {
   // ---------- BORDER RADIUS ----------
   if (cssObj["border-radius"]) tw.push(`rounded-[${cssObj["border-radius"]}]`);
 
+  // ---------- BORDER ----------
+  const borderSideMap: Record<string, string> = {
+    border: "border",
+    "border-top": "border-t",
+    "border-bottom": "border-b",
+    "border-left": "border-l",
+    "border-right": "border-r",
+  };
+
+  // Track border styles to avoid duplicates (Tailwind applies style to all sides)
+  const borderStyles = new Set<string>();
+
+  Object.entries(borderSideMap).forEach(([prop, twPrefix]) => {
+    if (cssObj[prop]) {
+      const borderValue = cssObj[prop];
+      // Parse border: width style color (e.g., "0.5px solid #ABABAB")
+      const parts = borderValue.trim().split(/\s+/);
+
+      if (parts.length >= 1) {
+        // Border width
+        const width = parts[0];
+        if (width && width !== "0" && width !== "0px") {
+          tw.push(`${twPrefix}-[${width}]`);
+        }
+      }
+
+      if (parts.length >= 2) {
+        // Border style (applies to all sides in Tailwind)
+        const style = parts[1];
+        if (style && style !== "none" && !borderStyles.has(style)) {
+          tw.push(`border-${style}`);
+          borderStyles.add(style);
+        }
+      }
+
+      if (parts.length >= 3) {
+        // Border color
+        const color = parts.slice(2).join(" ");
+        if (color && color !== "transparent") {
+          // Check if it's a dictionary-mapped value
+          if (color.startsWith("__DICT__")) {
+            const dictValue = color.replace("__DICT__", "");
+            tw.push(`${twPrefix}-[${dictValue}]`);
+          } else {
+            tw.push(`${twPrefix}-[${color}]`);
+          }
+        }
+      }
+    }
+  });
+
   // ---------- BACKGROUND ----------
-  if (cssObj["background-color"]) tw.push(`bg-[${cssObj["background-color"]}]`);
+  if (cssObj["background-color"]) {
+    // Check if it's a dictionary-mapped value
+    if (cssObj["background-color"].startsWith("__DICT__")) {
+      const dictValue = cssObj["background-color"].replace("__DICT__", "");
+      tw.push(`bg-[${dictValue}]`);
+    } else {
+      tw.push(`bg-[${cssObj["background-color"]}]`);
+    }
+  }
   if (cssObj["opacity"]) tw.push(`opacity-[${cssObj["opacity"]}]`);
 
   // ---------- BOX SHADOW ----------
@@ -197,22 +264,30 @@ export default function TailwindConverter() {
           const [, prop, value] = match;
 
           // Check for CSS variable: var(--X, fallback)
-          const varMatch = value.match(/var\(([^,]+),\s*([^)]+)\)/);
-          if (varMatch) {
+          // Replace all occurrences of var() in the value
+          let processedValue = value;
+          const varRegex = /var\(([^,]+),\s*([^)]+)\)/g;
+          let varMatch;
+
+          while ((varMatch = varRegex.exec(value)) !== null) {
             const [, varName, fallback] = varMatch;
             const trimmedVarName = varName.trim();
+            let replacement: string;
 
             // Check if variable exists in dictionary
             if (varDict[trimmedVarName]) {
               // Store the mapped value with a special marker to indicate it's from dict
-              obj[prop] = `__DICT__${varDict[trimmedVarName]}`;
+              replacement = `__DICT__${varDict[trimmedVarName]}`;
             } else {
               // Use fallback value (remove quotes if present)
-              obj[prop] = fallback.trim().replace(/^["']|["']$/g, "");
+              replacement = fallback.trim().replace(/^["']|["']$/g, "");
             }
-          } else {
-            obj[prop] = value;
+
+            // Replace the variable in the value
+            processedValue = processedValue.replace(varMatch[0], replacement);
           }
+
+          obj[prop] = processedValue;
         }
       }
       return obj;
@@ -277,8 +352,8 @@ export default function TailwindConverter() {
       <div className="border p-4 rounded space-y-3">
         <h3 className="text-lg font-medium">Variable Dictionary</h3>
         <p className="text-sm text-gray-600">
-          Map CSS variables to Tailwind class names (e.g., --Heading-Font →
-          mackinac)
+          Map CSS variables to Tailwind class values (e.g., --Border-Medium →
+          border-gray-400 or --Heading-Font → mackinac)
         </p>
 
         <div className="flex gap-2">
@@ -297,7 +372,7 @@ export default function TailwindConverter() {
           <input
             type="text"
             className="flex-1 border p-2 rounded text-sm"
-            placeholder="Tailwind suffix (e.g., mackinac)"
+            placeholder="Tailwind value (e.g., mackinac, border-gray-400)"
             value={newVarValue}
             onChange={(e) => setNewVarValue(e.target.value)}
             onKeyDown={(e) => {
@@ -324,7 +399,7 @@ export default function TailwindConverter() {
                 <span className="text-sm">
                   <span className="font-mono text-gray-700">{key}</span>
                   <span className="mx-2 text-gray-400">→</span>
-                  <span className="font-mono text-gray-900">font-{value}</span>
+                  <span className="font-mono text-gray-900">{value}</span>
                 </span>
                 <button
                   onClick={() => removeVarMapping(key)}
