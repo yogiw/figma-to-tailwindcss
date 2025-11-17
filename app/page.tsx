@@ -468,20 +468,30 @@ const mergeClasses = (
       const existingClass = existingByProperty.get(propertyType);
 
       if (existingClass) {
-        // There's a conflict - check if they're the same
-        // Remove prefix from new class for comparison
-        const newClassClean = newClass.includes(":")
-          ? newClass.split(":")[1]
-          : newClass;
-        const existingClassClean = existingClass.includes(":")
-          ? existingClass.split(":")[1]
-          : existingClass;
+        // Check if either class has a prefix (breakpoint modifier)
+        const newClassHasPrefix = newClass.includes(":");
+        const existingClassHasPrefix = existingClass.includes(":");
 
-        if (newClassClean !== existingClassClean) {
-          // Different values - add the prefixed new class
+        // If one has a prefix and the other doesn't, they apply to different breakpoints
+        // so we should keep both (always add the new one)
+        if (newClassHasPrefix !== existingClassHasPrefix) {
           merged.push(newClass);
+        } else {
+          // Both have prefixes or both don't - check if they're the same
+          // Remove prefix from both for comparison
+          const newClassClean = newClassHasPrefix
+            ? newClass.split(":")[1]
+            : newClass;
+          const existingClassClean = existingClassHasPrefix
+            ? existingClass.split(":")[1]
+            : existingClass;
+
+          if (newClassClean !== existingClassClean) {
+            // Different values - add the new class
+            merged.push(newClass);
+          }
+          // If same, skip (don't add duplicate)
         }
-        // If same, skip (don't add duplicate)
       } else {
         // No conflict - add the new class
         merged.push(newClass);
