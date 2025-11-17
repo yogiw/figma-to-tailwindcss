@@ -197,7 +197,12 @@ const toTailwind = (cssObj: Record<string, string>) => {
     // Check if it's a dictionary-mapped value
     if (cssObj["font-family"].startsWith("__DICT__")) {
       const dictValue = cssObj["font-family"].replace("__DICT__", "");
-      tw.push(`font-${dictValue}`);
+      // If dictionary value already starts with "font-", use it as-is
+      if (dictValue.startsWith("font-")) {
+        tw.push(dictValue);
+      } else {
+        tw.push(`font-${dictValue}`);
+      }
     } else {
       tw.push(`font-[${cssObj["font-family"]}]`);
     }
@@ -235,7 +240,15 @@ const toTailwind = (cssObj: Record<string, string>) => {
   if (cssObj["height"]) tw.push(`h-[${cssObj["height"]}]`);
 
   // ---------- BORDER RADIUS ----------
-  if (cssObj["border-radius"]) tw.push(`rounded-[${cssObj["border-radius"]}]`);
+  if (cssObj["border-radius"]) {
+    const radius = cssObj["border-radius"];
+    // Tailwind default is 4px, so use "rounded" instead of "rounded-[4px]"
+    if (radius === "4px" || radius === "0.25rem") {
+      tw.push("rounded");
+    } else {
+      tw.push(`rounded-[${radius}]`);
+    }
+  }
 
   // ---------- BORDER ----------
   const borderSideMap: Record<string, string> = {
@@ -259,7 +272,12 @@ const toTailwind = (cssObj: Record<string, string>) => {
         // Border width
         const width = parts[0];
         if (width && width !== "0" && width !== "0px") {
-          tw.push(`${twPrefix}-[${width}]`);
+          // Tailwind default is 1px, so use just the prefix instead of prefix-[1px]
+          if (width === "1px" || width === "0.0625rem") {
+            tw.push(twPrefix);
+          } else {
+            tw.push(`${twPrefix}-[${width}]`);
+          }
         }
       }
 
